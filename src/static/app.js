@@ -12,6 +12,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
       // Clear loading message
       activitiesList.innerHTML = "";
+      const placeholderOption = activitySelect.options[0].cloneNode(true);
+      activitySelect.replaceChildren(placeholderOption);
 
       // Populate activities list
       Object.entries(activities).forEach(([name, details]) => {
@@ -19,13 +21,95 @@ document.addEventListener("DOMContentLoaded", () => {
         activityCard.className = "activity-card";
 
         const spotsLeft = details.max_participants - details.participants.length;
+        const title = document.createElement("h4");
+        title.textContent = name;
+        activityCard.appendChild(title);
 
-        activityCard.innerHTML = `
-          <h4>${name}</h4>
-          <p>${details.description}</p>
-          <p><strong>Schedule:</strong> ${details.schedule}</p>
-          <p><strong>Availability:</strong> ${spotsLeft} spots left</p>
-        `;
+        const description = document.createElement("p");
+        description.textContent = details.description;
+        activityCard.appendChild(description);
+
+        const schedule = document.createElement("p");
+        const scheduleLabel = document.createElement("strong");
+        scheduleLabel.textContent = "Schedule: ";
+        schedule.append(scheduleLabel, details.schedule);
+        activityCard.appendChild(schedule);
+
+        const availability = document.createElement("p");
+        const availabilityLabel = document.createElement("strong");
+        availabilityLabel.textContent = "Availability: ";
+        const availabilityCount = document.createElement("span");
+        availabilityCount.textContent = `${spotsLeft} spots left`;
+        availability.append(availabilityLabel, availabilityCount);
+        activityCard.appendChild(availability);
+
+        const participantsSection = document.createElement("div");
+        participantsSection.className = "participants-section";
+        const participantsHeading = document.createElement("h5");
+        participantsHeading.textContent = "Participants";
+        participantsSection.appendChild(participantsHeading);
+
+        const participantsList = document.createElement("ul");
+        participantsList.className = "participants-list";
+        details.participants.forEach((participant) => {
+          const participantItem = document.createElement("li");
+          const participantEmail = document.createElement("span");
+          participantEmail.textContent = participant;
+          participantItem.appendChild(participantEmail);
+
+          const removeButton = document.createElement("button");
+          removeButton.type = "button";
+          removeButton.className = "remove-participant-button";
+          removeButton.setAttribute("aria-label", `Remove ${participant} from ${name}`);
+          removeButton.title = `Remove ${participant}`;
+
+          const deleteIcon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+          deleteIcon.setAttribute("viewBox", "0 0 24 24");
+          deleteIcon.setAttribute("aria-hidden", "true");
+          deleteIcon.setAttribute("focusable", "false");
+          const deletePath = document.createElementNS("http://www.w3.org/2000/svg", "path");
+          deletePath.setAttribute("d", "M4 7h16M10 11v6m4-6v6M6 7l1 13h10l1-13M9 7V4h6v3");
+          deletePath.setAttribute("fill", "none");
+          deletePath.setAttribute("stroke", "currentColor");
+          deletePath.setAttribute("stroke-linecap", "round");
+          deletePath.setAttribute("stroke-linejoin", "round");
+          deletePath.setAttribute("stroke-width", "1.8");
+          deleteIcon.appendChild(deletePath);
+          removeButton.appendChild(deleteIcon);
+
+          removeButton.addEventListener("click", async () => {
+            removeButton.disabled = true;
+            try {
+              const response = await fetch(
+                `/activities/${encodeURIComponent(name)}/signup?email=${encodeURIComponent(participant)}`,
+                { method: "DELETE" }
+              );
+              const result = await response.json();
+
+              if (!response.ok) {
+                throw new Error(result.detail || "Could not remove participant");
+              }
+
+              participantItem.remove();
+              availabilityCount.textContent = `${details.max_participants - participantsList.children.length} spots left`;
+              messageDiv.textContent = result.message;
+              messageDiv.className = "success";
+              messageDiv.classList.remove("hidden");
+            } catch (error) {
+              messageDiv.textContent = error.message || "Failed to remove participant. Please try again.";
+              messageDiv.className = "error";
+              messageDiv.classList.remove("hidden");
+            } finally {
+              removeButton.disabled = false;
+              setTimeout(() => messageDiv.classList.add("hidden"), 5000);
+            }
+          });
+
+          participantItem.appendChild(removeButton);
+          participantsList.appendChild(participantItem);
+        });
+        participantsSection.appendChild(participantsList);
+        activityCard.appendChild(participantsSection);
 
         activitiesList.appendChild(activityCard);
 
@@ -62,6 +146,7 @@ document.addEventListener("DOMContentLoaded", () => {
         messageDiv.textContent = result.message;
         messageDiv.className = "success";
         signupForm.reset();
+        await fetchActivities();
       } else {
         messageDiv.textContent = result.detail || "An error occurred";
         messageDiv.className = "error";
